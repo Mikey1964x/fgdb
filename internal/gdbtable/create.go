@@ -19,8 +19,8 @@ type CreateOptions struct {
 	Fields     []*Field
 	GeomType   uint8 // 0 for a table without geometry
 	HasZ, HasM bool
-	UTF16      bool // store strings as UTF-16 instead of UTF-8
-	OffsetSize int  // size of .gdbtablx offsets: 4, 5 (default) or 6
+	UTF16      bool   // store strings as UTF-16 instead of UTF-8
+	OffsetSize int    // size of .gdbtablx offsets: 4, 5 (default) or 6
 	Version    uint32 // 3 (32-bit ObjectIDs, default) or 4 (64-bit)
 }
 
