@@ -113,6 +113,7 @@ func (g *Geodatabase) Close() error {
 	g.mu.Unlock()
 	var err error
 	for _, t := range tables {
+		t.refs = 1
 		if e := t.Close(); e != nil && err == nil {
 			err = e
 		}
@@ -430,6 +431,19 @@ func (g *Geodatabase) OpenTable(path string) (*Table, error) {
 	if e.fileFormat == 1 {
 		return nil, fmt.Errorf("%w: table %q uses the compressed (CDF) format", ErrNotSupported, name)
 	}
+	if g.writable {
+		// Tables opened for update are shared, so that all edits go
+		// through one copy of the row index.
+		g.mu.Lock()
+		for t := range g.tables {
+			if strings.EqualFold(t.name, name) {
+				t.refs++
+				g.mu.Unlock()
+				return t, nil
+			}
+		}
+		g.mu.Unlock()
+	}
 	fn := g.tableFile(e.id)
 	if _, err := os.Stat(fn); errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("%w: table %q has no data file", ErrNotFound, name)
@@ -444,6 +458,7 @@ func (g *Geodatabase) OpenTable(path string) (*Table, error) {
 		return nil, err
 	}
 	t := newTable(g, name, raw, it)
+	t.refs = 1
 	g.mu.Lock()
 	g.tables[t] = struct{}{}
 	g.mu.Unlock()
@@ -453,10 +468,15 @@ func (g *Geodatabase) OpenTable(path string) (*Table, error) {
 // CloseTable closes a table (equivalent to t.Close()).
 func (g *Geodatabase) CloseTable(t *Table) error { return t.Close() }
 
-func (g *Geodatabase) forget(t *Table) {
+// release drops one reference to t and reports whether others remain.
+func (g *Geodatabase) release(t *Table) bool {
 	g.mu.Lock()
+	defer g.mu.Unlock()
+	if t.refs--; t.refs > 0 {
+		return true
+	}
 	delete(g.tables, t)
-	g.mu.Unlock()
+	return false
 }
 
 func (g *Geodatabase) check() error {

@@ -22,6 +22,8 @@ type Table struct {
 	defs   []FieldDef
 	prec   geom.Precision
 	closed bool
+	dirty  bool // rows changed since the indexes were rebuilt
+	refs   int  // number of OpenTable calls sharing this table (update mode)
 }
 
 func newTable(g *Geodatabase, name string, raw *gdbtable.Table, it *item) *Table {
@@ -197,14 +199,21 @@ func (t *Table) Path() string {
 	return `\` + t.name
 }
 
-// Close closes the table. Pending writes are flushed.
+// Close closes the table. Pending writes are flushed and the indexes of
+// the table are rebuilt.
 func (t *Table) Close() error {
 	if t.closed {
 		return nil
 	}
+	if t.gdb.release(t) {
+		return nil // still opened elsewhere
+	}
 	t.closed = true
-	t.gdb.forget(t)
-	return t.raw.Close()
+	err := t.flush()
+	if e := t.raw.Close(); err == nil {
+		err = e
+	}
+	return err
 }
 
 func (t *Table) check() error {
