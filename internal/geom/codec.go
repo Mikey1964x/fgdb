@@ -380,6 +380,12 @@ func Encode(s *Shape, p Precision) ([]byte, error) {
 	}
 	ext := *s
 	ext.ComputeExtent()
+	if s.XMin <= ext.XMin && s.YMin <= ext.YMin && s.XMax >= ext.XMax && s.YMax >= ext.YMax &&
+		(s.XMin != 0 || s.YMin != 0 || s.XMax != 0 || s.YMax != 0) {
+		// Keep the stored envelope: for curves it includes the arcs, not
+		// just the control points.
+		ext.XMin, ext.YMin, ext.XMax, ext.YMax = s.XMin, s.YMin, s.XMax, s.YMax
+	}
 	bboxEnc := func() {
 		b = gdbtable.AppendVarUint(b, quant(ext.XMin, p.XOrigin, p.XYScale))
 		b = gdbtable.AppendVarUint(b, quant(ext.YMin, p.YOrigin, p.XYScale))
