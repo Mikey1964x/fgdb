@@ -420,4 +420,7 @@ func TestGuid(t *testing.T) {
 	if a == b || a.IsNull() {
 		t.Error("NewGuid should be random")
 	}
+	if s := a.String(); s[15] != '4' || !strings.ContainsRune("89AB", rune(s[20])) {
+		t.Errorf("NewGuid %s is not a version 4 UUID", s)
+	}
 }

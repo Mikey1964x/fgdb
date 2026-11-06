@@ -214,7 +214,7 @@ func ParseGuid(s string) (Guid, error) {
 func NewGuid() Guid {
 	var raw [16]byte
 	_, _ = rand.Read(raw[:])
-	raw[6] = raw[6]&0x0F | 0x40
+	raw[7] = raw[7]&0x0F | 0x40 // version 4 (high nibble of the little-endian Data3)
 	raw[8] = raw[8]&0x3F | 0x80
 	return Guid(raw)
 }
