@@ -21,10 +21,11 @@ type CreateOptions struct {
 	HasZ, HasM bool
 	UTF16      bool // store strings as UTF-16 instead of UTF-8
 	OffsetSize int  // size of .gdbtablx offsets: 4, 5 (default) or 6
+	Version    uint32 // 3 (32-bit ObjectIDs, default) or 4 (64-bit)
 }
 
-// Create writes a new, empty version 3 table (.gdbtable and .gdbtablx) and
-// opens it for update. Existing files are not overwritten.
+// Create writes a new, empty table (.gdbtable and .gdbtablx) and opens it
+// for update. Existing files are not overwritten.
 func Create(path string, o CreateOptions) (*Table, error) {
 	if o.OffsetSize == 0 {
 		o.OffsetSize = 5
@@ -35,7 +36,13 @@ func Create(path string, o CreateOptions) (*Table, error) {
 	if len(o.Fields) == 0 || len(o.Fields) > 65535 {
 		return nil, errors.New("gdbtable: a table needs between 1 and 65535 fields")
 	}
-	t := &Table{Path: path, Version: 3, SecondaryVersion: 4, Fields: o.Fields, offsetSize: o.OffsetSize}
+	if o.Version == 0 {
+		o.Version = 3
+	}
+	if o.Version != 3 && o.Version != 4 {
+		return nil, fmt.Errorf("gdbtable: invalid version %d", o.Version)
+	}
+	t := &Table{Path: path, Version: o.Version, SecondaryVersion: 4, Fields: o.Fields, offsetSize: o.OffsetSize}
 	t.LayerFlags = uint32(o.GeomType)
 	if !o.UTF16 {
 		t.LayerFlags |= LayerFlagUTF8
@@ -64,7 +71,7 @@ func Create(path string, o CreateOptions) (*Table, error) {
 
 	fd := t.encodeFieldDesc()
 	h := make([]byte, 40, 40+len(fd))
-	le.PutUint32(h, 3)
+	le.PutUint32(h, o.Version)
 	le.PutUint32(h[8:], uint32(len(fd)-4))
 	le.PutUint32(h[12:], 5)
 	le.PutUint64(h[24:], uint64(40+len(fd)))
@@ -72,8 +79,11 @@ func Create(path string, o CreateOptions) (*Table, error) {
 	h = append(h, fd...)
 
 	x := make([]byte, 32)
-	le.PutUint32(x, 3)
+	le.PutUint32(x, o.Version)
 	le.PutUint32(x[12:], uint32(o.OffsetSize))
+	if o.Version == 4 {
+		x = x[:16] // no trailer when no block is present
+	}
 
 	if err := writeNew(path, h); err != nil {
 		return nil, err
